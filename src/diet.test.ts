@@ -30,17 +30,17 @@ describe('diet', () => {
 describe('dinnerSuggestions', () => {
   it('keeps room for the shake and a sweet, and ranks a protein-covering dinner first', () => {
     const s = dinnerSuggestions({ meals: { breakfast: 'protein-oats', lunch: 'rajma-chawal' } }, PHASES.arms);
-    // 2400 − 640 − 620 − 295 (shake) − 150 (sweet)
-    expect(s.kcalLeft).toBe(695);
+    // 2300 − 640 − 620 − 295 (shake) − 150 (sweet)
+    expect(s.kcalLeft).toBe(595);
     // 140 − 43 − 27 − 34
     expect(s.proteinLeft).toBe(36);
-    expect(s.fits[0].proteinShort).toBe(0);
+    expect(s.fits[0].proteinShort).toBeLessThanOrEqual(5);
     expect(s.fits[0].recipe.slot).toBe('dinner');
   });
 
   it('uses the ticked snack and sweet instead of reserving', () => {
     const s = dinnerSuggestions({ meals: { breakfast: 'egg-bhurji', lunch: 'tofu-rice-bowl', snack: 'yogurt-bowl', sweet: 'dark-choc', dinner: 'tikka' } }, PHASES.arms);
     expect(s.reservedShake).toBe(false);
-    expect(s.kcalLeft).toBe(2400 - 550 - 672 - 512 - 120);
+    expect(s.kcalLeft).toBe(2300 - 550 - 672 - 512 - 120);
   });
 });

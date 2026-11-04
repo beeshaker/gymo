@@ -26,17 +26,17 @@ export interface Phase {
 export const PHASES: Record<DietPhase, Phase> = {
   arms: {
     label: 'Arms phase',
-    kcal: 2400,
+    kcal: 2300,
     protein: 140,
     waterGlasses: 12,
-    note: 'Small surplus (~+100 kcal) to grow arms without adding much fat. Weigh in weekly; aim for +0.25 kg/week at most.',
+    note: 'Maintenance (recomp): at ~21% body fat, eat at maintenance with high protein. Arms grow while fat slowly drops, which makes the cut shorter. Weight should hold roughly steady; waist steady or down, arm up.',
   },
   cut: {
     label: 'Six-pack cut',
-    kcal: 1900,
+    kcal: 1850,
     protein: 145,
     waterGlasses: 13,
-    note: 'Drop 1 roti or half the rice at lunch and dinner. Keep the sweet ≤ 100 kcal (dark chocolate, banana ice cream). Protein stays the same. Aim for −0.5 kg/week.',
+    note: 'Long-term goal: 70 kg at 11% (≈62 kg lean, so ~6 kg more muscle than now). This cut: ~21% → 12–13%, about 71 → 64–65 kg, at ~0.5 kg/week, so ~14–16 weeks. After it, lean bulk (+200 kcal, ~0.25–0.5 kg/month) to ~72–73 kg, then a 6–8 week mini-cut to 70 kg at 11%. Walk 8–10k steps a day. Drop 1 roti or half the rice at lunch and dinner; sweets ≤ 100 kcal; protein stays high to keep the arm muscle. If the weekly average weight stalls 2 weeks in a row, cut another 100–150 kcal or add 2k steps. Take a diet break at maintenance for a week every 8–10 weeks.',
   },
 };
 
