@@ -261,3 +261,7 @@ p { margin: 6px 0; }
 .shop-row.on .shop-item, .shop-row.on .shop-qty { color: var(--muted); text-decoration: line-through; }
 .shop-item { flex: 1; font-weight: 600; }
 .shop-qty { color: var(--muted); font-size: 0.9rem; text-align: right; }
+.share-icon { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid #2f5b3c; background: none; color: #4ade80; padding: 0; }
+.share-icon:active { background: #1b2e22; }
+.plan-pick { display: flex; gap: 8px; align-items: center; }
+.plan-pick select { flex: 1; min-width: 0; }
