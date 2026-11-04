@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import { PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN } from './seed';
 import type { Checkin, Day, DietDay, DietPhase, Exercise, ExerciseLog, Meta, Session, SessionItem, Slot } from './types';
 import { DAYS } from './types';
+import { DEFAULT_WEEK, type WeekPlan } from './shopping';
 
 class GymoDB extends Dexie {
   exercises!: EntityTable<Exercise, 'id'>;
@@ -217,3 +218,37 @@ export async function setWater(date: string, water: number) {
 export async function getDietPhase(): Promise<DietPhase> {
   return ((await db.meta.get('dietPhase'))?.value as DietPhase | undefined) ?? 'arms';
 }
+
+// Weekly diet plan (drives the shopping list)
+
+export async function getWeekPlan(): Promise<WeekPlan> {
+  return ((await db.meta.get('weekPlan'))?.value as WeekPlan | undefined) ?? DEFAULT_WEEK;
+}
+
+export async function setWeekMeal(day: Day, slot: Slot, id: string | null) {
+  await db.transaction('rw', db.meta, async () => {
+    const week = await getWeekPlan();
+    const meals = { ...week[day] };
+    if (id) meals[slot] = id;
+    else delete meals[slot];
+    await db.meta.put({ key: 'weekPlan', value: { ...week, [day]: meals } });
+  });
+}
+
+export const resetWeekPlan = () => db.meta.delete('weekPlan');
+
+/** Shopping items ticked off as bought. */
+export async function getShopTicks(): Promise<string[]> {
+  return ((await db.meta.get('shopTicks'))?.value as string[] | undefined) ?? [];
+}
+
+export async function toggleShopTick(item: string) {
+  await db.transaction('rw', db.meta, async () => {
+    const ticks = new Set(await getShopTicks());
+    if (ticks.has(item)) ticks.delete(item);
+    else ticks.add(item);
+    await db.meta.put({ key: 'shopTicks', value: [...ticks] });
+  });
+}
+
+export const clearShopTicks = () => db.meta.delete('shopTicks');
