@@ -56,6 +56,16 @@ class GymoDB extends Dexie {
         if (existing) await table.update(existing.id!, { ...PULL_UP_FIELDS, order, active: true });
         else await table.add({ day: 'Wed', name: PULL_UP.name, ...PULL_UP_FIELDS, order, active: true, superset: false });
       });
+    // v4: Saturday is chest and back only — drop its arm superset.
+    this.version(4)
+      .stores({})
+      .upgrade(async (tx) => {
+        const table = tx.table<Exercise, number>('exercises');
+        const arms = new Set(['Seated hammer curl', 'Seated triceps pushdown']);
+        for (const ex of await table.where('day').equals('Sat').toArray()) {
+          if (arms.has(ex.name)) await table.update(ex.id!, { active: false, superset: false });
+        }
+      });
     this.on('populate', (tx) => {
       tx.table('exercises').bulkAdd(SEED);
     });

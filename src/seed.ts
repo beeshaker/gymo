@@ -42,8 +42,6 @@ const rows: Row[] = [
   { day: 'Sat', name: 'Pec deck', sets: 2, minReps: 12, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Same machine as the reverse fly.', superset: true },
   { day: 'Sat', name: 'Seated reverse fly', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 2.5, note: 'Reverse pec deck.' },
   { day: 'Sat', name: 'Seated dumbbell shrug', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2, note: '1 s pause at the top.' },
-  { day: 'Sat', name: 'Seated hammer curl', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 1, note: 'Per hand.', superset: true },
-  { day: 'Sat', name: 'Seated triceps pushdown', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope.' },
 
   { day: 'Sun', name: 'Seated lateral raise', sets: 3, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 1, note: '' },
   { day: 'Sun', name: 'Seated supported curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Preacher or seated barbell/dumbbell curl.', superset: true },
