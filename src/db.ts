@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { SEED } from './seed';
+import { PULL_UP, PULL_UP_FIELDS, SEED } from './seed';
 import type { Checkin, Day, Exercise, ExerciseLog, Meta, Session, SessionItem } from './types';
 import { DAYS } from './types';
 
@@ -41,6 +41,20 @@ class GymoDB extends Dexie {
           }
         }
         await table.bulkAdd([...seeds.values()]);
+      });
+    // v3: pull-ups lead Wednesday in place of the heavy pulldown. Targeted so
+    // exercises the user has added or edited since v2 are left alone.
+    this.version(3)
+      .stores({})
+      .upgrade(async (tx) => {
+        const table = tx.table<Exercise, number>('exercises');
+        const wed = await table.where('day').equals('Wed').toArray();
+        const pulldown = wed.find((e) => e.active && e.name === 'Seated lat pulldown');
+        const existing = wed.find((e) => /pull.?ups?$/i.test(e.name.trim()));
+        const order = pulldown?.order ?? -1;
+        if (pulldown) await table.update(pulldown.id!, { active: false, superset: false });
+        if (existing) await table.update(existing.id!, { ...PULL_UP_FIELDS, order, active: true });
+        else await table.add({ day: 'Wed', name: PULL_UP.name, ...PULL_UP_FIELDS, order, active: true, superset: false });
       });
     this.on('populate', (tx) => {
       tx.table('exercises').bulkAdd(SEED);

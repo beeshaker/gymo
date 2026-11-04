@@ -4,6 +4,18 @@ import type { Exercise } from './types';
 // logged history carries over. Rest is per set; for a superset pair, the first
 // exercise flows straight into the second and the rest comes after the pair.
 // Units and increments are best guesses — edit them in Settings.
+/** Pull-ups (v3): Wednesday's main vertical pull, replacing the 3×6–10 pulldown. */
+export const PULL_UP = { name: 'Pull-up' };
+export const PULL_UP_FIELDS = {
+  sets: 3,
+  minReps: 6,
+  maxReps: 10,
+  restSec: 150,
+  unit: 'kg' as const,
+  increment: 2.5,
+  note: 'Load = added weight (0 = bodyweight). Step up from a bench and step back down onto it — never drop. No kipping.',
+};
+
 type Row = Omit<Exercise, 'id' | 'order' | 'active' | 'superset'> & { superset?: boolean };
 
 const rows: Row[] = [
@@ -12,7 +24,7 @@ const rows: Row[] = [
   { day: 'Tue', name: 'Seated triceps pushdown', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope. Straight into the overhead extension.', superset: true },
   { day: 'Tue', name: 'Seated overhead triceps extension', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope, cable low, seated facing away. Deep stretch for the long head.' },
 
-  { day: 'Wed', name: 'Seated lat pulldown', sets: 3, minReps: 6, maxReps: 10, restSec: 150, unit: 'lb', increment: 5, note: 'Replaces pull-ups while landing/stepping is unsafe.' },
+  { day: 'Wed', name: PULL_UP.name, ...PULL_UP_FIELDS },
   { day: 'Wed', name: 'Seated cable row', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'lb', increment: 5, note: 'V-handle, chest tall, pause at the belly.' },
   { day: 'Wed', name: 'Incline dumbbell curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Arms hang behind the body for the stretch. Per hand.', superset: true },
   { day: 'Wed', name: 'Seated reverse fly', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 2.5, note: 'Reverse pec deck. Rear delts.' },
