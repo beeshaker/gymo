@@ -1,44 +1,111 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Chips, DecisionTag, RestPanel, Stepper } from '../components';
-import { dayExercises, db, finishSession, history, saveLog } from '../db';
+import { createExercise, dayExercises, db, finishSession, history, planFor, saveLog } from '../db';
 import { decide, type Decision } from '../progression';
 import { keepAwake, skipRest, startRest } from '../timer';
-import type { Exercise, ExerciseLog, Session, Toe } from '../types';
+import type { Exercise, ExerciseLog, Session, SessionItem, Toe } from '../types';
+
+type Item = SessionItem & { ex: Exercise };
+type Sheet = null | 'edit' | 'add' | 'swap';
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function Runner({ session, onExit }: { session: Session; onExit: () => void }) {
-  const exercises = useLiveQuery(() => dayExercises(session.day), [session.day]);
+  const all = useLiveQuery(() => db.exercises.toArray(), []);
   const logs = useLiveQuery(() => db.logs.where('sessionId').equals(session.id!).toArray(), [session.id]);
   const [idx, setIdx] = useState<number | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
 
   useEffect(() => {
     keepAwake(true);
     return () => keepAwake(false);
   }, []);
 
-  const setsFor = (ex: Exercise) => (session.deload ? Math.ceil(ex.sets / 2) : ex.sets);
-  const logOf = (ex: Exercise) => logs?.find((l) => l.exerciseId === ex.id);
-  const isDone = (ex: Exercise) => (logOf(ex)?.reps.length ?? 0) >= setsFor(ex);
+  // Sessions started before per-session plans existed: snapshot the day's plan.
+  useEffect(() => {
+    if (!session.plan) {
+      void dayExercises(session.day).then((exs) => db.sessions.update(session.id!, { plan: planFor(exs, session.deload) }));
+    }
+  }, [session]);
+
+  const items: Item[] = useMemo(() => {
+    const byId = new Map((all ?? []).map((e) => [e.id!, e]));
+    return (session.plan ?? []).flatMap((p) => (byId.has(p.exerciseId) ? [{ ...p, ex: byId.get(p.exerciseId)! }] : []));
+  }, [all, session.plan]);
+
+  const count = (it: Item) => logs?.find((l) => l.exerciseId === it.exerciseId)?.reps.length ?? 0;
+  const isDone = (it: Item) => count(it) >= it.sets;
 
   // Resume at the first unfinished exercise, then stay put so the RIR/toe
   // questions show after the last set instead of jumping ahead.
   useEffect(() => {
-    if (idx !== null || !exercises || !logs) return;
-    const open = exercises.findIndex((ex) => !isDone(ex));
-    setIdx(open === -1 ? Math.max(0, exercises.length - 1) : open);
+    if (idx !== null || !all || !logs || !session.plan) return;
+    const open = items.findIndex((it) => !isDone(it));
+    setIdx(open === -1 ? Math.max(0, items.length - 1) : open);
   });
 
-  if (!exercises || !logs || idx === null) return null;
+  if (!all || !logs || !session.plan || idx === null) return null;
 
-  const i = Math.min(idx, exercises.length - 1);
-  const ex = exercises[i];
+  const i = Math.max(0, Math.min(idx, items.length - 1));
+  const item = items[i] as Item | undefined;
+  const partner = (j: number) =>
+    items[j]?.ex.superset && items[j + 1] ? j + 1 : j > 0 && items[j - 1].ex.superset ? j - 1 : null;
+  const setPlan = (plan: SessionItem[]) => db.sessions.update(session.id!, { plan });
+
+  /** After a set: alternate within a superset, otherwise rest on the spot. */
+  const onLogged = (j: number, done: number) => {
+    const it = items[j];
+    const p = partner(j);
+    const pOpen = p !== null && count(items[p]) < items[p].sets;
+    if (done >= it.sets) {
+      // Stay to answer RIR/toe; rest leads into whatever comes next.
+      const next = pOpen ? items[p!] : items[Math.max(j, p ?? j) + 1];
+      if (next && !(p === j + 1 && pOpen)) startRest(it.ex.restSec, next.ex.name);
+      return;
+    }
+    if (pOpen && p === j + 1) {
+      setIdx(p); // first half of a superset: straight into the partner
+    } else if (pOpen) {
+      setIdx(p!);
+      startRest(it.ex.restSec, `${items[p!].ex.name} · set ${count(items[p!]) + 1}`);
+    } else {
+      startRest(it.ex.restSec, `${it.ex.name} · set ${done + 1}`);
+    }
+  };
 
   const finish = async () => {
-    const open = exercises.filter((e) => !isDone(e)).length;
+    const open = items.filter((it) => !isDone(it)).length;
     if (open && !confirm(`${open} exercise${open > 1 ? 's' : ''} not finished. Finish anyway?`)) return;
     skipRest();
     await finishSession(session.id!);
     onExit();
+  };
+
+  const pick = async (choice: Exercise | string, permanent: boolean) => {
+    let ex = typeof choice === 'string' ? await createExercise(session.day, choice, permanent) : choice;
+    if (permanent && ex.day !== session.day) {
+      // Plans are per day: copy it into this day (starts its own history).
+      const { id: _id, ...rest } = ex;
+      ex = { ...rest, day: session.day, active: true, superset: false, order: 999 };
+      ex.id = (await db.exercises.add(ex)) as number;
+    }
+    const entry = { exerciseId: ex.id!, sets: session.deload ? Math.ceil(ex.sets / 2) : ex.sets };
+    const plan = [...session.plan!];
+    if (sheet === 'swap' && item) {
+      plan[i] = entry;
+      if (permanent) {
+        await db.exercises.update(ex.id!, { active: true, order: item.ex.order, superset: item.ex.superset });
+        if (ex.id !== item.ex.id) await db.exercises.update(item.ex.id!, { active: false, superset: false });
+      }
+      setIdx(i);
+    } else {
+      plan.splice(i + 1, 0, entry);
+      if (permanent) await db.exercises.update(ex.id!, { active: true, order: item ? item.ex.order + 0.5 : 999 });
+      setIdx(items.length ? i + 1 : 0);
+    }
+    await setPlan(plan);
+    setSheet(null);
   };
 
   return (
@@ -53,33 +120,70 @@ export default function Runner({ session, onExit }: { session: Session; onExit: 
       </header>
 
       <div className="dots">
-        {exercises.map((e, j) => (
+        {items.map((it, j) => (
           <button
-            key={e.id}
-            className={`dot ${j === i ? 'on' : ''} ${isDone(e) ? 'done' : (logOf(e)?.reps.length ?? 0) > 0 ? 'part' : ''}`}
+            key={`${j}-${it.exerciseId}`}
+            className={`dot ${j === i ? 'on' : ''} ${isDone(it) ? 'done' : count(it) > 0 ? 'part' : ''} ${it.ex.superset && items[j + 1] ? 'linked' : ''}`}
             onClick={() => setIdx(j)}
-            aria-label={e.name}
+            aria-label={it.ex.name}
           />
         ))}
+        <button className="dot-add" onClick={() => setSheet('add')} aria-label="Add exercise">+</button>
       </div>
 
       <main className="screen">
-        {ex ? (
+        {item ? (
           <ExerciseView
-            key={ex.id}
-            ex={ex}
+            key={`${i}-${item.exerciseId}`}
+            ex={item.ex}
             session={session}
-            log={logOf(ex)}
-            sets={setsFor(ex)}
+            log={logs.find((l) => l.exerciseId === item.exerciseId)}
+            sets={item.sets}
             first={i === 0}
-            next={exercises[i + 1]}
-            onNext={() => (i + 1 < exercises.length ? setIdx(i + 1) : finish())}
+            supersetWith={partner(i) !== null ? items[partner(i)!].ex.name : undefined}
+            next={items[i + 1]?.ex}
+            onLogged={(n) => onLogged(i, n)}
+            onEdit={() => setSheet('edit')}
+            onNext={() => {
+              const p = partner(i);
+              if (p !== null && !isDone(items[p])) setIdx(p);
+              else if (i + 1 < items.length) setIdx(Math.max(i, p ?? i) + 1 < items.length ? Math.max(i, p ?? i) + 1 : i + 1);
+              else void finish();
+            }}
             onPrev={i > 0 ? () => setIdx(i - 1) : undefined}
           />
         ) : (
-          <p className="muted">No exercises for this day.</p>
+          <div className="card">
+            <p>No exercises in this session.</p>
+            <button className="btn primary" onClick={() => setSheet('add')}>+ Add exercise</button>
+          </div>
         )}
       </main>
+
+      {sheet === 'edit' && item && (
+        <EditSheet
+          item={item}
+          logged={count(item)}
+          onSets={(n) => setPlan(session.plan!.map((p, k) => (k === i ? { ...p, sets: n } : p)))}
+          onSwap={() => setSheet('swap')}
+          onRemove={async (permanent) => {
+            await setPlan(session.plan!.filter((_, k) => k !== i));
+            if (permanent) await db.exercises.update(item.ex.id!, { active: false, superset: false });
+            setSheet(null);
+          }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {(sheet === 'add' || sheet === 'swap') && (
+        <Picker
+          title={sheet === 'swap' && item ? `Swap ${item.ex.name} for…` : 'Add exercise'}
+          day={session.day}
+          all={all}
+          exclude={new Set(items.map((it) => it.exerciseId))}
+          onPick={pick}
+          onClose={() => setSheet(null)}
+        />
+      )}
       <RestPanel />
     </div>
   );
@@ -91,7 +195,10 @@ interface ViewProps {
   log?: ExerciseLog;
   sets: number;
   first: boolean;
+  supersetWith?: string;
   next?: Exercise;
+  onLogged: (setsDone: number) => void;
+  onEdit: () => void;
   onNext: () => void;
   onPrev?: () => void;
 }
@@ -99,10 +206,11 @@ interface ViewProps {
 function ExerciseView(props: ViewProps) {
   const hist = useLiveQuery(() => history(props.ex.id!, props.session.id), [props.ex.id, props.session.id]);
   if (!hist) return null;
-  return <SetLogger {...props} decision={decide(props.ex, hist)} last={hist.at(-1)} />;
+  return <SetLogger {...props} decision={decide({ ...props.ex, sets: props.sets }, hist)} last={hist.at(-1)} />;
 }
 
-function SetLogger({ ex, session, log, sets, first, next, onNext, onPrev, decision, last }: ViewProps & { decision: Decision; last?: ExerciseLog }) {
+function SetLogger(props: ViewProps & { decision: Decision; last?: ExerciseLog }) {
+  const { ex, session, log, sets, first, supersetWith, next, onLogged, onEdit, onNext, onPrev, decision, last } = props;
   const done = log?.reps ?? [];
   const [load, setLoad] = useState(log?.load ?? decision.load ?? 0);
   const [reps, setReps] = useState(decision.reps[done.length] ?? decision.reps.at(-1) ?? ex.minReps);
@@ -127,13 +235,11 @@ function SetLogger({ ex, session, log, sets, first, next, onNext, onPrev, decisi
 
   const logSet = async () => {
     const r = [...done, reps];
-    const finished = r.length >= sets;
-    const t = finished && toe === null ? 'none' : toe;
+    const t = r.length >= sets && toe === null ? 'none' : toe;
     setToe(t);
     setReps(decision.reps[r.length] ?? reps);
-    if (!finished) startRest(ex.restSec, `${ex.name} · set ${r.length + 1}`);
-    else if (next) startRest(ex.restSec, next.name);
     await persist({ reps: r, toe: t });
+    onLogged(r.length);
   };
 
   const undo = async () => {
@@ -157,9 +263,13 @@ function SetLogger({ ex, session, log, sets, first, next, onNext, onPrev, decisi
   return (
     <>
       <div className="ex-head">
-        <h1>{ex.name}</h1>
+        <div className="ex-title">
+          <h1>{ex.name}</h1>
+          <button className="btn ghost" onClick={onEdit}>Edit</button>
+        </div>
         <div className="muted">
           {sets} × {ex.minReps}–{ex.maxReps} · 1–2 reps in reserve
+          {supersetWith && <> · <span className="ss">✱ superset with {supersetWith}</span></>}
         </div>
       </div>
 
@@ -177,7 +287,7 @@ function SetLogger({ ex, session, log, sets, first, next, onNext, onPrev, decisi
       </div>
 
       <div className="sets">
-        {Array.from({ length: sets }, (_, j) => (
+        {Array.from({ length: Math.max(sets, done.length) }, (_, j) => (
           <button
             key={j}
             className={`set ${j < done.length ? 'logged' : j === done.length ? 'current' : ''} ${
@@ -197,7 +307,8 @@ function SetLogger({ ex, session, log, sets, first, next, onNext, onPrev, decisi
         <>
           <Stepper label={`Reps — set ${done.length + 1}`} value={reps} step={1} onChange={setReps} />
           <button className="btn primary big" onClick={logSet}>
-            Log set {done.length + 1} · start {Math.floor(ex.restSec / 60)}:{String(ex.restSec % 60).padStart(2, '0')} rest
+            Log set {done.length + 1}
+            {supersetWith ? ' · next exercise' : ` · start ${mmss(ex.restSec)} rest`}
           </button>
         </>
       ) : (
@@ -236,5 +347,118 @@ function SetLogger({ ex, session, log, sets, first, next, onNext, onPrev, decisi
         </button>
       </div>
     </>
+  );
+}
+
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+        <div className="row">
+          <h2>{title}</h2>
+          <button className="x" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EditSheet(props: {
+  item: Item;
+  logged: number;
+  onSets: (n: number) => void;
+  onSwap: () => void;
+  onRemove: (permanent: boolean) => void;
+  onClose: () => void;
+}) {
+  const { item, logged, onSets, onSwap, onRemove, onClose } = props;
+  const ex = item.ex;
+  const [permanent, setPermanent] = useState(false);
+  const upd = (patch: Partial<Exercise>) => db.exercises.update(ex.id!, patch);
+
+  const setSets = (n: number) => {
+    onSets(n);
+    if (permanent) void upd({ sets: n });
+  };
+
+  return (
+    <Sheet title={ex.name} onClose={onClose}>
+      <label className="toggle">
+        <input type="checkbox" checked={permanent} onChange={(e) => setPermanent(e.target.checked)} />
+        <span>
+          Save to plan <span className="muted">— otherwise sets, swaps and removals are today only</span>
+        </span>
+      </label>
+      <Stepper label="Sets" value={item.sets} step={1} min={Math.max(1, logged)} onChange={setSets} />
+      <div className="grid2">
+        <Stepper label="Min reps" value={ex.minReps} step={1} min={1} onChange={(v) => upd({ minReps: Math.min(v, ex.maxReps) })} />
+        <Stepper label="Max reps" value={ex.maxReps} step={1} min={1} onChange={(v) => upd({ maxReps: Math.max(v, ex.minReps) })} />
+      </div>
+      <div className="grid2">
+        <Stepper label="Rest (s)" value={ex.restSec} step={15} min={15} onChange={(v) => upd({ restSec: v })} />
+        <Stepper label={`Step (${ex.unit})`} value={ex.increment} step={0.5} min={0.5} onChange={(v) => upd({ increment: v })} />
+      </div>
+      <p className="muted">Rep range, rest and step always save to the exercise (they drive the add-weight rule).</p>
+      <label className="toggle">
+        <input type="checkbox" checked={ex.superset} onChange={(e) => upd({ superset: e.target.checked })} />
+        <span>Superset with the next exercise</span>
+      </label>
+      <div className="stack">
+        <button className="btn ghost" onClick={onSwap}>Swap for another exercise…</button>
+        <button className="btn ghost danger" onClick={() => onRemove(permanent)}>
+          Remove {permanent ? 'from plan' : 'from today'}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function Picker(props: {
+  title: string;
+  day: string;
+  all: Exercise[];
+  exclude: Set<number>;
+  onPick: (choice: Exercise | string, permanent: boolean) => void;
+  onClose: () => void;
+}) {
+  const { title, day, all, exclude, onPick, onClose } = props;
+  const [q, setQ] = useState('');
+  const [permanent, setPermanent] = useState(false);
+  const query = q.trim().toLowerCase();
+  const list = all
+    .filter((e) => !exclude.has(e.id!) && (!query || e.name.toLowerCase().includes(query)))
+    .sort((a, b) => Number(b.day === day) - Number(a.day === day) || a.name.localeCompare(b.name));
+  const exact = all.some((e) => e.day === day && e.name.toLowerCase() === query);
+
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <input className="select" placeholder="Search or type a new exercise" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+      <label className="toggle">
+        <input type="checkbox" checked={permanent} onChange={(e) => setPermanent(e.target.checked)} />
+        <span>
+          Save to plan <span className="muted">— otherwise today only</span>
+        </span>
+      </label>
+      {query && !exact && (
+        <button className="btn primary" onClick={() => onPick(q.trim(), permanent)}>
+          + Create “{q.trim()}”
+        </button>
+      )}
+      <ul className="pick-list">
+        {list.map((e) => (
+          <li key={e.id}>
+            <button onClick={() => onPick(e, permanent)}>
+              <span>{e.name}</span>
+              <span className="muted">
+                {e.day} · {e.sets}×{e.minReps}–{e.maxReps} {e.unit}
+                {!e.active && ' · alt'}
+              </span>
+            </button>
+          </li>
+        ))}
+        {!list.length && !query && <li className="muted">Nothing else in the library yet — type a name above.</li>}
+      </ul>
+    </Sheet>
   );
 }

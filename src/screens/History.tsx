@@ -121,11 +121,14 @@ function Checkins() {
   return (
     <Card>
       <h2>Weekly check-in · week {form.week}</h2>
-      <p className="muted">Average of 3 morning weigh-ins. Waist every 2 weeks, photos every 4.</p>
+      <p className="muted">Average of 3 morning weigh-ins. Waist and arm every 2 weeks (same arm, same time of day), photos every 4.</p>
       <div className="grid3">
         <label>Avg weight (kg)<input {...num('avgWeight')} /></label>
         <label>Avg sleep (h)<input {...num('sleep')} /></label>
         <label>Waist (cm)<input {...num('waist')} /></label>
+      </div>
+      <div className="grid3">
+        <label>Arm, flexed (cm)<input {...num('arm')} /></label>
       </div>
       <label>
         Recovery
@@ -145,12 +148,12 @@ function Checkins() {
       {!!all?.length && (
         <table className="table">
           <thead>
-            <tr><th>Wk</th><th>Kg</th><th>Sleep</th><th>Waist</th><th>Rec.</th></tr>
+            <tr><th>Wk</th><th>Kg</th><th>Sleep</th><th>Waist</th><th>Arm</th><th>Rec.</th></tr>
           </thead>
           <tbody>
             {all.map((c) => (
               <tr key={c.week} onClick={() => setForm(c)}>
-                <td>{c.week}</td><td>{c.avgWeight ?? '–'}</td><td>{c.sleep ?? '–'}</td><td>{c.waist ?? '–'}</td><td>{c.recovery || '–'}</td>
+                <td>{c.week}</td><td>{c.avgWeight ?? '–'}</td><td>{c.sleep ?? '–'}</td><td>{c.waist ?? '–'}</td><td>{c.arm ?? '–'}</td><td>{c.recovery || '–'}</td>
               </tr>
             ))}
           </tbody>

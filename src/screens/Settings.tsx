@@ -29,7 +29,7 @@ export default function Settings() {
 
   const add = async () => {
     const order = Math.max(-1, ...(exercises ?? []).map((e) => e.order)) + 1;
-    await db.exercises.add({ day, order, name: 'New exercise', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: '', active: true });
+    await db.exercises.add({ day, order, name: 'New exercise', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: '', active: true, superset: false });
   };
 
   const remove = async (ex: Exercise) => {
@@ -134,7 +134,7 @@ function ExerciseEditor({ ex, onMove, onRemove }: { ex: Exercise; onMove: (e: Ex
     <details className={`editor ${ex.active ? '' : 'inactive'}`}>
       <summary>
         <span>{ex.name}{!ex.active && ' (hidden)'}</span>
-        <span className="muted">{ex.sets}×{ex.minReps}–{ex.maxReps} {ex.unit}</span>
+        <span className="muted">{ex.superset && '✱ '}{ex.sets}×{ex.minReps}–{ex.maxReps} {ex.unit}</span>
       </summary>
       <label>
         Name
@@ -154,6 +154,10 @@ function ExerciseEditor({ ex, onMove, onRemove }: { ex: Exercise; onMove: (e: Ex
           </select>
         </label>
       </div>
+      <label className="toggle">
+        <input type="checkbox" checked={ex.superset} onChange={(e) => upd({ superset: e.target.checked })} />
+        <span>Superset with the next exercise</span>
+      </label>
       <label>
         Machine / notes
         <input defaultValue={ex.note} onBlur={(e) => upd({ note: e.target.value })} />

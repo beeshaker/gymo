@@ -18,7 +18,16 @@ export interface Exercise {
   /** Smallest load jump available on this machine / implement. */
   increment: number;
   note: string;
+  /** Hidden exercises stay in the library (with history) but aren't in the plan. */
   active: boolean;
+  /** Superset with the next exercise in the list. */
+  superset: boolean;
+}
+
+/** An exercise as scheduled in one session; edits here are "today only". */
+export interface SessionItem {
+  exerciseId: number;
+  sets: number;
 }
 
 export interface Session {
@@ -29,6 +38,7 @@ export interface Session {
   deload: boolean;
   finished: boolean;
   startedAt: number;
+  plan?: SessionItem[];
 }
 
 /** One row per exercise per session, mirroring the "Workout log" sheet. */
@@ -52,6 +62,8 @@ export interface Checkin {
   avgWeight?: number;
   sleep?: number;
   waist?: number;
+  /** Flexed upper-arm circumference. */
+  arm?: number;
   recovery?: string;
   notes?: string;
 }

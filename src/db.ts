@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { SEED } from './seed';
-import type { Checkin, Day, Exercise, ExerciseLog, Meta, Session } from './types';
+import type { Checkin, Day, Exercise, ExerciseLog, Meta, Session, SessionItem } from './types';
 import { DAYS } from './types';
 
 class GymoDB extends Dexie {
@@ -19,6 +19,29 @@ class GymoDB extends Dexie {
       checkins: 'week',
       meta: 'key',
     });
+    // v2: arm-priority plan. Keep ids (and history) for exercises that match by
+    // day + name; hide replaced ones that have logs, delete the rest.
+    this.version(2)
+      .stores({})
+      .upgrade(async (tx) => {
+        const table = tx.table<Exercise, number>('exercises');
+        const logged = new Set((await tx.table<ExerciseLog>('logs').toArray()).map((l) => l.exerciseId));
+        const key = (e: Exercise) => `${e.day}|${e.name}`;
+        const seeds = new Map(SEED.map((s) => [key(s), s]));
+        for (const ex of await table.toArray()) {
+          const s = seeds.get(key(ex));
+          if (s) {
+            const { sets, minReps, maxReps, restSec, note, order, superset } = s;
+            await table.update(ex.id!, { sets, minReps, maxReps, restSec, note, order, superset, active: true });
+            seeds.delete(key(ex));
+          } else if (logged.has(ex.id!)) {
+            await table.update(ex.id!, { active: false, superset: false });
+          } else {
+            await table.delete(ex.id!);
+          }
+        }
+        await table.bulkAdd([...seeds.values()]);
+      });
     this.on('populate', (tx) => {
       tx.table('exercises').bulkAdd(SEED);
     });
@@ -65,10 +88,22 @@ export function weekOf(iso: string, start: string | undefined): number {
   return Math.max(1, Math.floor(days / 7) + 1);
 }
 
+export const planFor = (exs: Exercise[], deload: boolean): SessionItem[] =>
+  exs.map((e) => ({ exerciseId: e.id!, sets: deload ? Math.ceil(e.sets / 2) : e.sets }));
+
 export async function startSession(day: Day, deload: boolean): Promise<number> {
   const date = todayISO();
   if (!(await getStartDate())) await db.meta.put({ key: 'startDate', value: date });
-  return db.sessions.add({ date, day, deload, finished: false, startedAt: Date.now() }) as Promise<number>;
+  const plan = planFor(await dayExercises(day), deload);
+  return db.sessions.add({ date, day, deload, finished: false, startedAt: Date.now(), plan }) as Promise<number>;
+}
+
+/** Add an exercise to the library (hidden from the plan unless `active`). */
+export async function createExercise(day: Day, name: string, active: boolean): Promise<Exercise> {
+  const order = Math.max(-1, ...(await db.exercises.where('day').equals(day).toArray()).map((e) => e.order)) + 1;
+  const ex: Exercise = { day, order, name, sets: 3, minReps: 8, maxReps: 12, restSec: 90, unit: 'kg', increment: 2.5, note: '', active, superset: false };
+  ex.id = (await db.exercises.add(ex)) as number;
+  return ex;
 }
 
 export async function activeSession(): Promise<Session | undefined> {

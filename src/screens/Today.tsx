@@ -66,8 +66,9 @@ export default function Today({ session, onRun }: { session?: Session; onRun: ()
       </div>
 
       <ul className="plan">
-        {plan?.map(({ ex, last, decision }) => (
+        {plan?.map(({ ex, last, decision }, j) => (
           <li key={ex.id}>
+            {plan[j - 1]?.ex.superset && <div className="ss-mark">✱ superset with above</div>}
             <div className="plan-top">
               <span className="plan-name">{ex.name}</span>
               <DecisionTag d={decision} />

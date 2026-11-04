@@ -188,3 +188,33 @@ p { margin: 6px 0; }
 .editor summary::-webkit-details-marker { display: none; }
 .editor[open] { display: flex; flex-direction: column; gap: 10px; }
 .editor.inactive summary { opacity: 0.5; }
+
+/* On-the-fly editing */
+.ex-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ss { color: var(--blue); }
+.dot.linked { margin-right: -4px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.dot.linked + .dot { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.dot-add { width: 28px; height: 20px; margin-top: -6px; border-radius: 6px; border: 1px dashed var(--muted); background: none; color: var(--muted); line-height: 1; padding: 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid2 .stepper-row { grid-template-columns: 44px 1fr 44px; }
+.grid2 .step { height: 48px; font-size: 1.4rem; }
+.grid2 .stepper-value input { font-size: 1.3rem; }
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 20; display: flex; align-items: flex-end; justify-content: center; }
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 20px 20px 0 0;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sheet h2 { margin: 0; }
+.pick-list { list-style: none; margin: 0; padding: 0; }
+.pick-list li { border-top: 1px solid var(--line); }
+.pick-list button { width: 100%; text-align: left; background: none; border: 0; padding: 12px 2px; display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.plan .ss-mark { color: var(--blue); font-size: 0.8rem; font-weight: 700; }
