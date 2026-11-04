@@ -1,14 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useRef, useState } from 'react';
-import { Card } from '../components';
-import { db, getStartDate } from '../db';
+import { Card, Chips } from '../components';
+import { PHASES } from '../diet';
+import { db, getDietPhase, getStartDate } from '../db';
 import { download, exportCSV, exportJSON, importJSON } from '../export';
 import { SEED } from '../seed';
 import { requestNotifications } from '../timer';
-import { TRAINING_DAYS, type Day, type Exercise, type Unit } from '../types';
+import { TRAINING_DAYS, type Day, type DietPhase, type Exercise, type Unit } from '../types';
 
 export default function Settings() {
   const start = useLiveQuery(getStartDate);
+  const phase = useLiveQuery(getDietPhase, [], 'arms');
   const [day, setDay] = useState<Day>('Tue');
   const exercises = useLiveQuery(
     async () => (await db.exercises.where('day').equals(day).toArray()).sort((a, b) => a.order - b.order),
@@ -80,6 +82,16 @@ export default function Settings() {
         <button className="btn ghost" onClick={() => requestNotifications().then(() => alert(`Notifications: ${Notification.permission}`))}>
           Enable rest-over notifications
         </button>
+      </Card>
+
+      <Card>
+        <h2>Diet phase</h2>
+        <Chips<DietPhase>
+          options={[{ value: 'arms', label: 'Arms (now)' }, { value: 'cut', label: 'Six-pack cut' }]}
+          value={phase}
+          onChange={(value) => db.meta.put({ key: 'dietPhase', value })}
+        />
+        <p className="muted">{PHASES[phase].kcal} kcal · {PHASES[phase].protein} g protein a day. Switch to the cut once the toe heals and you can add cardio.</p>
       </Card>
 
       <Card>

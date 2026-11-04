@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN } from './seed';
-import type { Checkin, Day, Exercise, ExerciseLog, Meta, Session, SessionItem } from './types';
+import type { Checkin, Day, DietDay, DietPhase, Exercise, ExerciseLog, Meta, Session, SessionItem, Slot } from './types';
 import { DAYS } from './types';
 
 class GymoDB extends Dexie {
@@ -9,6 +9,7 @@ class GymoDB extends Dexie {
   logs!: EntityTable<ExerciseLog, 'id'>;
   checkins!: EntityTable<Checkin, 'week'>;
   meta!: EntityTable<Meta, 'key'>;
+  diet!: EntityTable<DietDay, 'date'>;
 
   constructor() {
     super('gymo');
@@ -96,6 +97,8 @@ class GymoDB extends Dexie {
           else await table.add({ day: 'Sun', ...fields, order, active: true });
         }
       });
+    // v6: daily diet checklist.
+    this.version(6).stores({ diet: 'date' });
     this.on('populate', (tx) => {
       tx.table('exercises').bulkAdd(SEED);
     });
@@ -186,4 +189,31 @@ export async function finishSession(id: number) {
     if (count === 0) await db.sessions.delete(id);
     else await db.sessions.update(id, { finished: true });
   });
+}
+
+// Diet checklist
+
+export async function dietDay(date: string): Promise<DietDay> {
+  return (await db.diet.get(date)) ?? { date, meals: {}, water: 0 };
+}
+
+/** Tick a meal (one recipe per slot); null clears it. */
+export async function setMeal(date: string, slot: Slot, id: string | null) {
+  await db.transaction('rw', db.diet, async () => {
+    const d = await dietDay(date);
+    const meals = { ...d.meals };
+    if (id) meals[slot] = id;
+    else delete meals[slot];
+    await db.diet.put({ ...d, meals });
+  });
+}
+
+export async function setWater(date: string, water: number) {
+  await db.transaction('rw', db.diet, async () => {
+    await db.diet.put({ ...(await dietDay(date)), water: Math.max(0, Math.round(water)) });
+  });
+}
+
+export async function getDietPhase(): Promise<DietPhase> {
+  return ((await db.meta.get('dietPhase'))?.value as DietPhase | undefined) ?? 'arms';
 }

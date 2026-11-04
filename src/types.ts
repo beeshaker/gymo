@@ -68,6 +68,17 @@ export interface Checkin {
   notes?: string;
 }
 
+export type Slot = 'breakfast' | 'lunch' | 'snack' | 'dinner' | 'sweet';
+export type DietPhase = 'arms' | 'cut';
+
+/** One diet checklist per calendar day. Meal values are recipe ids from diet.ts. */
+export interface DietDay {
+  date: string; // YYYY-MM-DD, local
+  meals: Partial<Record<Slot, string>>;
+  /** 250 ml glasses. */
+  water: number;
+}
+
 export interface Meta {
   key: string;
   value: unknown;

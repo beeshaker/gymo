@@ -1,6 +1,6 @@
 import { db, getStartDate, openSessionIds, weekOf } from './db';
 import { decide } from './progression';
-import type { Checkin, Exercise, ExerciseLog, Meta, Session } from './types';
+import type { Checkin, DietDay, Exercise, ExerciseLog, Meta, Session } from './types';
 
 interface Backup {
   app: 'gymo';
@@ -11,6 +11,7 @@ interface Backup {
   logs: ExerciseLog[];
   checkins: Checkin[];
   meta: Meta[];
+  diet?: DietDay[];
 }
 
 export function download(name: string, text: string, type: string) {
@@ -30,6 +31,7 @@ export async function exportJSON(): Promise<string> {
     logs: await db.logs.toArray(),
     checkins: await db.checkins.toArray(),
     meta: await db.meta.toArray(),
+    diet: await db.diet.toArray(),
   };
   return JSON.stringify(backup, null, 2);
 }
@@ -39,13 +41,14 @@ export async function importJSON(text: string) {
   if (b.app !== 'gymo' || !Array.isArray(b.exercises) || !Array.isArray(b.logs)) {
     throw new Error('Not a Gymo backup file');
   }
-  await db.transaction('rw', [db.exercises, db.sessions, db.logs, db.checkins, db.meta], async () => {
-    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.logs.clear(), db.checkins.clear(), db.meta.clear()]);
+  await db.transaction('rw', [db.exercises, db.sessions, db.logs, db.checkins, db.meta, db.diet], async () => {
+    await Promise.all([db.exercises.clear(), db.sessions.clear(), db.logs.clear(), db.checkins.clear(), db.meta.clear(), db.diet.clear()]);
     await db.exercises.bulkAdd(b.exercises);
     await db.sessions.bulkAdd(b.sessions ?? []);
     await db.logs.bulkAdd(b.logs);
     await db.checkins.bulkAdd(b.checkins ?? []);
     await db.meta.bulkAdd(b.meta ?? []);
+    await db.diet.bulkAdd(b.diet ?? []);
   });
 }
 
