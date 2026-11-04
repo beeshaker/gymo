@@ -16,6 +16,15 @@ export const PULL_UP_FIELDS = {
   note: 'Load = added weight (0 = bodyweight). Step up from a bench and step back down onto it — never drop. No kipping.',
 };
 
+/** v5: second Thursday arm superset, restoring the sets Saturday gave up. */
+export const THU_HAMMER = { name: 'Seated hammer curl', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 1, note: 'Per hand. Straight into the pushdown.', superset: true };
+export const THU_PUSHDOWN = { name: 'Seated triceps pushdown', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 2.5, note: 'Rope.', superset: false };
+
+/** v5: Sunday's second arm pair, replacing concentration curl + pushdown. */
+export const SUN_BAYESIAN = { name: 'Seated Bayesian curl', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 1, note: 'One arm. Incline bench facing away from a low cable, arm drifts behind the body for the stretch. Straight into the kickback.', superset: true };
+export const SUN_KICKBACK = { name: 'Chest-supported triceps kickback', sets: 3, minReps: 12, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 1, note: 'Chest on an incline bench, feet unloaded. Upper arm pinned to your side, squeeze at full lockout. Dumbbell or cable, per arm.', superset: false };
+export const SUN_REPLACED = ['Concentration curl', 'Seated triceps pushdown'];
+
 type Row = Omit<Exercise, 'id' | 'order' | 'active' | 'superset'> & { superset?: boolean };
 
 const rows: Row[] = [
@@ -34,6 +43,8 @@ const rows: Row[] = [
   { day: 'Thu', name: 'Seated lateral raise', sets: 3, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 1, note: 'Strict form. Per hand.' },
   { day: 'Thu', name: 'Seated supported curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Preacher or seated dumbbell curl.', superset: true },
   { day: 'Thu', name: 'Lying dumbbell triceps extension', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Lying on bench, elbows slightly back. Per hand.' },
+  { day: 'Thu', ...THU_HAMMER },
+  { day: 'Thu', ...THU_PUSHDOWN },
   { day: 'Thu', name: 'Seated dumbbell shrug', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2, note: 'Sit on bench end. Shoulders to ears, 1 s pause. Straps OK.' },
 
   { day: 'Sat', name: 'Supported chest press', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'kg', increment: 2.5, note: '' },
@@ -46,8 +57,8 @@ const rows: Row[] = [
   { day: 'Sun', name: 'Seated lateral raise', sets: 3, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 1, note: '' },
   { day: 'Sun', name: 'Seated supported curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Preacher or seated barbell/dumbbell curl.', superset: true },
   { day: 'Sun', name: 'Seated overhead triceps extension', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope, cable low.' },
-  { day: 'Sun', name: 'Concentration curl', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 1, note: 'Seated, elbow on inner thigh. Per hand.', superset: true },
-  { day: 'Sun', name: 'Seated triceps pushdown', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope.' },
+  { day: 'Sun', ...SUN_BAYESIAN },
+  { day: 'Sun', ...SUN_KICKBACK },
 ];
 
 export const SEED: Exercise[] = rows.map((r) => ({

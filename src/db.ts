@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { PULL_UP, PULL_UP_FIELDS, SEED } from './seed';
+import { PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN } from './seed';
 import type { Checkin, Day, Exercise, ExerciseLog, Meta, Session, SessionItem } from './types';
 import { DAYS } from './types';
 
@@ -64,6 +64,36 @@ class GymoDB extends Dexie {
         const arms = new Set(['Seated hammer curl', 'Seated triceps pushdown']);
         for (const ex of await table.where('day').equals('Sat').toArray()) {
           if (arms.has(ex.name)) await table.update(ex.id!, { active: false, superset: false });
+        }
+      });
+    // v5: Thursday gets a second arm superset (hammer curl + pushdown, 2 sets
+    // each) after the lying extension. Reuses same-named Thursday rows if any.
+    // Sunday's concentration curl + pushdown are hidden (history kept) and
+    // Bayesian curl + kickback take their slots.
+    this.version(5)
+      .stores({})
+      .upgrade(async (tx) => {
+        const table = tx.table<Exercise, number>('exercises');
+        const thu = (await table.where('day').equals('Thu').toArray()).sort((a, b) => a.order - b.order);
+        const anchor = thu.find((e) => e.active && e.name === 'Lying dumbbell triceps extension');
+        const at = anchor ? anchor.order + 1 : Math.max(-1, ...thu.map((e) => e.order)) + 1;
+        for (const ex of thu) if (ex.order >= at) await table.update(ex.id!, { order: ex.order + 2 });
+        for (const [i, fields] of [THU_HAMMER, THU_PUSHDOWN].entries()) {
+          const existing = thu.find((e) => e.name === fields.name);
+          if (existing) await table.update(existing.id!, { ...fields, order: at + i, active: true });
+          else await table.add({ day: 'Thu', ...fields, order: at + i, active: true });
+        }
+
+        const sun = await table.where('day').equals('Sun').toArray();
+        const old = SUN_REPLACED.map((n) => sun.find((e) => e.active && e.name === n));
+        const next = Math.max(-1, ...sun.map((e) => e.order)) + 1;
+        for (const [i, fields] of [SUN_BAYESIAN, SUN_KICKBACK].entries()) {
+          const prev = old[i];
+          if (prev) await table.update(prev.id!, { active: false, superset: false });
+          const order = prev?.order ?? next + i;
+          const existing = sun.find((e) => e.name === fields.name);
+          if (existing) await table.update(existing.id!, { ...fields, order, active: true });
+          else await table.add({ day: 'Sun', ...fields, order, active: true });
         }
       });
     this.on('populate', (tx) => {
