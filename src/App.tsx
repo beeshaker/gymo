@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useState } from 'react';
-import { activeSession } from './db';
+import { useEffect, useRef, useState } from 'react';
+import { activeSession, todayISO } from './db';
 import Diet from './screens/Diet';
 import History from './screens/History';
 import Runner from './screens/Runner';
@@ -15,6 +15,16 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('today');
   const [running, setRunning] = useState(false);
   const session = useLiveQuery(activeSession, [], null);
+
+  // App updates reload the page. If that happens mid-workout, go straight back
+  // into it instead of dropping to the Workout tab. Checked once per load, so
+  // "Back" still works afterwards.
+  const checked = useRef(false);
+  useEffect(() => {
+    if (session === null || checked.current) return;
+    checked.current = true;
+    if (session && session.date === todayISO()) setRunning(true);
+  }, [session]);
 
   if (running && session) {
     return <Runner session={session} onExit={() => setRunning(false)} />;
