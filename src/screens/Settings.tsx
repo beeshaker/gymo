@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useRef, useState } from 'react';
 import { Card, Chips } from '../components';
 import { PHASES } from '../diet';
-import { db, getDietPhase, getStartDate } from '../db';
+import { db, getDietPhase, getStartDate, moveToDay, renumber } from '../db';
 import { download, exportCSV, exportJSON, importJSON } from '../export';
 import { SEED } from '../seed';
 import { requestNotifications } from '../timer';
@@ -21,12 +21,20 @@ export default function Settings() {
 
   const move = async (ex: Exercise, dir: -1 | 1) => {
     const list = exercises!;
-    const j = list.indexOf(ex) + dir;
+    let j = list.indexOf(ex) + dir;
+    // Step over hidden exercises so every tap changes the visible plan.
+    while (ex.active && list[j] && !list[j].active) j += dir;
     if (j < 0 || j >= list.length) return;
-    await db.transaction('rw', db.exercises, async () => {
-      await db.exercises.update(ex.id!, { order: list[j].order });
-      await db.exercises.update(list[j].id!, { order: ex.order });
-    });
+    const next = list.filter((e) => e !== ex);
+    next.splice(j, 0, ex);
+    await renumber(next);
+  };
+
+  const changeDay = async (ex: Exercise, to: Day) => {
+    const clash = await db.exercises.where('day').equals(to).filter((e) => e.name === ex.name).count();
+    if (clash && !confirm(`${to} already has ${ex.name}. Move this one there too? (Their logs stay separate.)`)) return;
+    await moveToDay(ex.id!, to);
+    setDay(to);
   };
 
   const add = async () => {
@@ -102,7 +110,7 @@ export default function Settings() {
             <button key={d} className={`day ${d === day ? 'on' : ''}`} onClick={() => setDay(d)}>{d}</button>
           ))}
         </div>
-        {exercises?.map((ex) => <ExerciseEditor key={ex.id} ex={ex} onMove={move} onRemove={remove} />)}
+        {exercises?.map((ex) => <ExerciseEditor key={ex.id} ex={ex} onMove={move} onDay={changeDay} onRemove={remove} />)}
         <button className="btn ghost" onClick={add}>+ Add exercise to {day}</button>
       </Card>
 
@@ -125,7 +133,13 @@ export default function Settings() {
   );
 }
 
-function ExerciseEditor({ ex, onMove, onRemove }: { ex: Exercise; onMove: (e: Exercise, d: -1 | 1) => void; onRemove: (e: Exercise) => void }) {
+function ExerciseEditor(props: {
+  ex: Exercise;
+  onMove: (e: Exercise, d: -1 | 1) => void;
+  onDay: (e: Exercise, day: Day) => void;
+  onRemove: (e: Exercise) => void;
+}) {
+  const { ex, onMove, onDay, onRemove } = props;
   const upd = (patch: Partial<Exercise>) => db.exercises.update(ex.id!, patch);
   const num = (k: 'sets' | 'minReps' | 'maxReps' | 'restSec' | 'increment', label: string) => (
     <label>
@@ -151,6 +165,14 @@ function ExerciseEditor({ ex, onMove, onRemove }: { ex: Exercise; onMove: (e: Ex
       <label>
         Name
         <input defaultValue={ex.name} onBlur={(e) => e.target.value.trim() && upd({ name: e.target.value.trim() })} />
+      </label>
+      <label>
+        <span>Day <span className="muted">— moves it (and its history) to the end of that day</span></span>
+        <select value={ex.day} onChange={(e) => onDay(ex, e.target.value as Day)}>
+          {TRAINING_DAYS.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
       </label>
       <div className="grid3">
         {num('sets', 'Sets')}

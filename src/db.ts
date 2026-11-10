@@ -111,9 +111,11 @@ export const db = new GymoDB();
 export const todayISO = () => new Date().toLocaleDateString('en-CA');
 export const dayOf = (iso: string): Day => DAYS[(new Date(iso + 'T12:00').getDay() + 6) % 7];
 
+const byOrder = (a: Exercise, b: Exercise) => a.order - b.order || a.id! - b.id!;
+
 export async function dayExercises(day: Day): Promise<Exercise[]> {
   const list = await db.exercises.where('day').equals(day).toArray();
-  return list.filter((e) => e.active).sort((a, b) => a.order - b.order);
+  return list.filter((e) => e.active).sort(byOrder);
 }
 
 /**
@@ -162,6 +164,43 @@ export async function createExercise(day: Day, name: string, active: boolean): P
   const ex: Exercise = { day, order, name, sets: 3, minReps: 8, maxReps: 12, restSec: 90, unit: 'kg', increment: 2.5, note: '', active, superset: false };
   ex.id = (await db.exercises.add(ex)) as number;
   return ex;
+}
+
+/** Write `order` as 0..n-1 following `list` (also clears ties and fractions). */
+export async function renumber(list: Exercise[]) {
+  await db.transaction('rw', db.exercises, async () => {
+    for (const [k, e] of list.entries()) if (e.order !== k) await db.exercises.update(e.id!, { order: k });
+  });
+}
+
+/**
+ * Save a session's exercise order to the day's plan. The day's active
+ * exercises that are in the session are laid out in session order across the
+ * slots they already hold; hidden ones and ones dropped today keep their slot.
+ */
+export async function savePlanOrder(day: Day, plan: SessionItem[]) {
+  await db.transaction('rw', db.exercises, async () => {
+    const list = (await db.exercises.where('day').equals(day).toArray()).sort(byOrder);
+    const inPlan = new Set(plan.map((p) => p.exerciseId));
+    const moving = (e: Exercise) => e.active && inPlan.has(e.id!);
+    const byId = new Map(list.map((e) => [e.id!, e]));
+    const seq = plan.map((p) => byId.get(p.exerciseId)).filter((e): e is Exercise => !!e && moving(e));
+    await renumber(list.map((e) => (moving(e) ? seq.shift()! : e)));
+  });
+}
+
+/** Move an exercise (with its history) to the end of another day's plan. */
+export async function moveToDay(id: number, day: Day) {
+  await db.transaction('rw', db.exercises, async () => {
+    const ex = await db.exercises.get(id);
+    if (!ex || ex.day === day) return;
+    // Whatever was supersetted into it shouldn't pair with the next one instead.
+    const from = (await db.exercises.where('day').equals(ex.day).toArray()).filter((e) => e.active).sort(byOrder);
+    const prev = from[from.findIndex((e) => e.id === id) - 1];
+    if (ex.active && prev?.superset) await db.exercises.update(prev.id!, { superset: false });
+    const order = Math.max(-1, ...(await db.exercises.where('day').equals(day).toArray()).map((e) => e.order)) + 1;
+    await db.exercises.update(id, { day, order, superset: false });
+  });
 }
 
 export async function activeSession(): Promise<Session | undefined> {

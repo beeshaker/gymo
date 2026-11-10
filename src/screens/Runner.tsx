@@ -1,13 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useState } from 'react';
 import { Chips, DecisionTag, RestPanel, Stepper } from '../components';
-import { createExercise, dayExercises, db, finishSession, history, planFor, saveLog } from '../db';
+import { createExercise, dayExercises, db, finishSession, history, planFor, saveLog, savePlanOrder } from '../db';
 import { decide, type Decision } from '../progression';
 import { keepAwake, skipRest, startRest } from '../timer';
 import type { Exercise, ExerciseLog, Session, SessionItem, Toe } from '../types';
 
 type Item = SessionItem & { ex: Exercise };
-type Sheet = null | 'edit' | 'add' | 'swap';
+type Sheet = null | 'edit' | 'add' | 'swap' | 'order';
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
@@ -101,11 +101,25 @@ export default function Runner({ session, onExit }: { session: Session; onExit: 
       setIdx(i);
     } else {
       plan.splice(i + 1, 0, entry);
-      if (permanent) await db.exercises.update(ex.id!, { active: true, order: item ? item.ex.order + 0.5 : 999 });
+      if (permanent) await db.exercises.update(ex.id!, { active: true });
       setIdx(items.length ? i + 1 : 0);
     }
     await setPlan(plan);
+    if (permanent && sheet === 'add') await savePlanOrder(session.day, plan);
     setSheet(null);
+  };
+
+  /** Move exercise j one place earlier/later today; the open exercise stays open. */
+  const move = async (j: number, dir: -1 | 1, permanent: boolean) => {
+    const k = j + dir;
+    const plan = [...session.plan!];
+    if (k < 0 || k >= plan.length) return;
+    [plan[j], plan[k]] = [plan[k], plan[j]];
+    const open = item?.exerciseId;
+    await setPlan(plan);
+    if (permanent) await savePlanOrder(session.day, plan);
+    const at = plan.findIndex((p) => p.exerciseId === open);
+    if (at !== -1) setIdx(at);
   };
 
   return (
@@ -129,12 +143,15 @@ export default function Runner({ session, onExit }: { session: Session; onExit: 
           />
         ))}
         <button className="dot-add" onClick={() => setSheet('add')} aria-label="Add exercise">+</button>
+        {items.length > 1 && (
+          <button className="dot-add" onClick={() => setSheet('order')} aria-label="Change exercise order">⇅</button>
+        )}
       </div>
 
       <main className="screen">
         {item ? (
           <ExerciseView
-            key={`${i}-${item.exerciseId}`}
+            key={item.exerciseId}
             ex={item.ex}
             session={session}
             log={logs.find((l) => l.exerciseId === item.exerciseId)}
@@ -166,11 +183,22 @@ export default function Runner({ session, onExit }: { session: Session; onExit: 
           logged={count(item)}
           onSets={(n) => setPlan(session.plan!.map((p, k) => (k === i ? { ...p, sets: n } : p)))}
           onSwap={() => setSheet('swap')}
+          onOrder={() => setSheet('order')}
           onRemove={async (permanent) => {
             await setPlan(session.plan!.filter((_, k) => k !== i));
             if (permanent) await db.exercises.update(item.ex.id!, { active: false, superset: false });
             setSheet(null);
           }}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === 'order' && (
+        <OrderSheet
+          items={items}
+          current={i}
+          count={count}
+          onMove={move}
+          onSave={() => savePlanOrder(session.day, session.plan!)}
           onClose={() => setSheet(null)}
         />
       )}
@@ -369,10 +397,11 @@ function EditSheet(props: {
   logged: number;
   onSets: (n: number) => void;
   onSwap: () => void;
+  onOrder: () => void;
   onRemove: (permanent: boolean) => void;
   onClose: () => void;
 }) {
-  const { item, logged, onSets, onSwap, onRemove, onClose } = props;
+  const { item, logged, onSets, onSwap, onOrder, onRemove, onClose } = props;
   const ex = item.ex;
   const [permanent, setPermanent] = useState(false);
   const upd = (patch: Partial<Exercise>) => db.exercises.update(ex.id!, patch);
@@ -405,11 +434,58 @@ function EditSheet(props: {
         <span>Superset with the next exercise</span>
       </label>
       <div className="stack">
+        <button className="btn ghost" onClick={onOrder}>Change order…</button>
         <button className="btn ghost" onClick={onSwap}>Swap for another exercise…</button>
         <button className="btn ghost danger" onClick={() => onRemove(permanent)}>
           Remove {permanent ? 'from plan' : 'from today'}
         </button>
       </div>
+    </Sheet>
+  );
+}
+
+function OrderSheet(props: {
+  items: Item[];
+  current: number;
+  count: (it: Item) => number;
+  onMove: (j: number, dir: -1 | 1, permanent: boolean) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const { items, current, count, onMove, onSave, onClose } = props;
+  const [permanent, setPermanent] = useState(false);
+  return (
+    <Sheet title="Exercise order" onClose={onClose}>
+      <label className="toggle">
+        <input
+          type="checkbox"
+          checked={permanent}
+          onChange={(e) => {
+            setPermanent(e.target.checked);
+            if (e.target.checked) onSave();
+          }}
+        />
+        <span>
+          Save to plan <span className="muted">— otherwise today only</span>
+        </span>
+      </label>
+      <ul className="order-list">
+        {items.map((it, j) => (
+          <li key={it.exerciseId} className={j === current ? 'on' : ''}>
+            <div className="order-name">
+              <span>{it.ex.name}</span>
+              <span className="muted">
+                {count(it)}/{it.sets} sets
+                {it.ex.superset && items[j + 1] && <span className="ss"> · ✱ superset with next</span>}
+              </span>
+            </div>
+            <button className="step" disabled={j === 0} onClick={() => onMove(j, -1, permanent)} aria-label={`Move ${it.ex.name} up`}>↑</button>
+            <button className="step" disabled={j === items.length - 1} onClick={() => onMove(j, 1, permanent)} aria-label={`Move ${it.ex.name} down`}>↓</button>
+          </li>
+        ))}
+      </ul>
+      <p className="muted">A superset pairs an exercise with whatever sits right below it.</p>
+      <button className="btn primary" onClick={onClose}>Done</button>
     </Sheet>
   );
 }

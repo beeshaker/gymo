@@ -104,12 +104,17 @@ export function startRest(seconds: number, label: string) {
   set({ endAt: Date.now() + seconds * 1000, total: seconds, label });
 }
 
+/** Add (or, with a negative value, take off) rest time. Cutting past zero ends the rest now. */
 export function addRest(seconds: number) {
   if (!state) return;
-  const endAt = Math.max(Date.now(), state.endAt) + seconds * 1000;
-  if (endAt - Date.now() > 10_000) warned = false;
+  const now = Date.now();
+  const base = Math.max(now, state.endAt);
+  if (seconds < 0 && base === now) return; // already over
+  const endAt = Math.max(now, base + seconds * 1000);
+  if (endAt - now > 10_000) warned = false;
   rang = false;
-  set({ ...state, endAt, total: state.total + seconds });
+  // Shrink the total by the same amount so the progress bar keeps its place.
+  set({ ...state, endAt, total: Math.max(1, state.total + (endAt - base) / 1000) });
 }
 
 export function skipRest() {

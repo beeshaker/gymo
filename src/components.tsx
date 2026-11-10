@@ -77,7 +77,10 @@ export function RestPanel() {
           <div className="rest-next">Next: {state.label}</div>
         </div>
         <div className="rest-actions">
-          <button className="btn ghost" onClick={() => addRest(30)}>+30s</button>
+          <div className="rest-adjust">
+            <button className="btn ghost" onClick={() => addRest(-30)} disabled={done} aria-label="30 seconds less rest">−30s</button>
+            <button className="btn ghost" onClick={() => addRest(30)} aria-label="30 seconds more rest">+30s</button>
+          </div>
           <button className="btn ghost" onClick={skipRest}>{done ? 'Close' : 'Skip'}</button>
         </div>
       </div>
