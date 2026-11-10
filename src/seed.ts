@@ -25,6 +25,26 @@ export const SUN_BAYESIAN = { name: 'Seated Bayesian curl', sets: 3, minReps: 10
 export const SUN_KICKBACK = { name: 'Chest-supported triceps kickback', sets: 3, minReps: 12, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 1, note: 'Chest on an incline bench, feet unloaded. Upper arm pinned to your side, squeeze at full lockout. Dumbbell or cable, per arm.', superset: false };
 export const SUN_REPLACED = ['Concentration curl', 'Seated triceps pushdown'];
 
+/**
+ * v7: toe-safe leg block at the end of Wed and Sun — machines where the foot
+ * carries no load. Starts at 2 sets after months without leg work.
+ */
+const LEGS_START = 'Until 24 Nov: 2 sets, stop 3 reps short. From 25 Nov: Sets → 3 in Settings, then 1–2 in reserve.';
+const LEG_CURL = { name: 'Seated leg curl', sets: 2, minReps: 10, maxReps: 15, restSec: 90, unit: 'kg' as const, increment: 2.5 };
+const LEG_EXT = { name: 'Seated leg extension', sets: 2, minReps: 10, maxReps: 15, restSec: 90, unit: 'kg' as const, increment: 2.5 };
+const CURL_CUE = 'Pad on the lower calf above the heel, foot relaxed. Don’t push off the bad foot getting in or out.';
+const EXT_CUE = 'Pad just above the ankle, toes up and relaxed — never press with them.';
+const WARM_UP = 'One light warm-up set first.';
+export const WED_LEGS = [
+  { ...LEG_CURL, superset: true, note: `${WARM_UP} ${CURL_CUE} Straight into the leg extension. ${LEGS_START}` },
+  { ...LEG_EXT, superset: false, note: `${EXT_CUE} ${LEGS_START}` },
+];
+export const SUN_LEGS = [
+  { ...LEG_EXT, superset: true, note: `${WARM_UP} ${EXT_CUE} Straight into the leg curl. ${LEGS_START}` },
+  { ...LEG_CURL, superset: false, note: `${CURL_CUE} ${LEGS_START}` },
+  { name: 'Hip adduction machine', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg' as const, increment: 2.5, superset: false, note: 'Arch or heel on the foot peg, not the toes. Squeeze the thighs together, 1 s pause, slow on the way out.' },
+];
+
 type Row = Omit<Exercise, 'id' | 'order' | 'active' | 'superset'> & { superset?: boolean };
 
 const rows: Row[] = [
@@ -38,6 +58,7 @@ const rows: Row[] = [
   { day: 'Wed', name: 'Incline dumbbell curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Arms hang behind the body for the stretch. Per hand.', superset: true },
   { day: 'Wed', name: 'Seated reverse fly', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 2.5, note: 'Reverse pec deck. Rear delts.' },
   { day: 'Wed', name: 'Seated hammer curl', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 1, note: 'Brachialis + forearm thickness. Per hand.' },
+  ...WED_LEGS.map((r) => ({ day: 'Wed' as const, ...r })),
 
   { day: 'Thu', name: 'Seated machine shoulder press', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'kg', increment: 2.5, note: '' },
   { day: 'Thu', name: 'Seated lateral raise', sets: 3, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 1, note: 'Strict form. Per hand.' },
@@ -59,6 +80,7 @@ const rows: Row[] = [
   { day: 'Sun', name: 'Seated overhead triceps extension', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope, cable low.' },
   { day: 'Sun', ...SUN_BAYESIAN },
   { day: 'Sun', ...SUN_KICKBACK },
+  ...SUN_LEGS.map((r) => ({ day: 'Sun' as const, ...r })),
 ];
 
 export const SEED: Exercise[] = rows.map((r) => ({

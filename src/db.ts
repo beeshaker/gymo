@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN } from './seed';
+import { PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_LEGS, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN, WED_LEGS } from './seed';
 import type { Checkin, Day, DietDay, DietPhase, Exercise, ExerciseLog, Meta, Session, SessionItem, Slot } from './types';
 import { DAYS } from './types';
 import { DEFAULT_WEEK, type WeekPlan } from './shopping';
@@ -100,6 +100,26 @@ class GymoDB extends Dexie {
       });
     // v6: daily diet checklist.
     this.version(6).stores({ diet: 'date' });
+    // v7: toe-safe leg block appended to Wed and Sun. Reuses same-named rows
+    // on that day (keeping their history) instead of adding duplicates.
+    this.version(7)
+      .stores({})
+      .upgrade(async (tx) => {
+        const table = tx.table<Exercise, number>('exercises');
+        for (const [day, block] of [['Wed', WED_LEGS], ['Sun', SUN_LEGS]] as const) {
+          const list = (await table.where('day').equals(day).toArray()).sort((a, b) => a.order - b.order);
+          const same = (name: string) => list.find((e) => e.name.trim().toLowerCase() === name.toLowerCase());
+          // The day's last exercise mustn't start pairing with the new block.
+          const last = list.filter((e) => e.active && !block.some((b) => same(b.name) === e)).at(-1);
+          if (last?.superset) await table.update(last.id!, { superset: false });
+          let order = Math.max(-1, ...list.map((e) => e.order)) + 1;
+          for (const fields of block) {
+            const existing = same(fields.name);
+            if (existing) await table.update(existing.id!, { ...fields, order: order++, active: true });
+            else await table.add({ day, ...fields, order: order++, active: true });
+          }
+        }
+      });
     this.on('populate', (tx) => {
       tx.table('exercises').bulkAdd(SEED);
     });
