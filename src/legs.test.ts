@@ -39,8 +39,9 @@ describe('leg block (v7)', () => {
     await db.open();
     const names = async (d: Day) => (await dayExercises(d)).map((e) => e.name);
 
-    expect(await names('Wed')).toEqual(['Pull-up', 'Seated hammer curl', 'Seated leg curl', 'Seated leg extension']);
-    expect((await dayExercises('Wed'))[1].superset).toBe(false);
+    // v8 then rebuilds Wednesday's back block ahead of the legs.
+    expect((await names('Wed')).slice(-2)).toEqual(['Seated leg curl', 'Seated leg extension']);
+    expect((await dayExercises('Wed')).at(-3)!.superset).toBe(false);
     expect(await names('Sun')).toEqual(['Chest-supported triceps kickback', 'Seated leg extension', 'Seated leg curl', 'Hip adduction machine']);
     // The old Sunday leg curl was reused (same id), not duplicated.
     const sunCurls = (await db.exercises.where('day').equals('Sun').toArray()).filter((e) => /leg curl/i.test(e.name));

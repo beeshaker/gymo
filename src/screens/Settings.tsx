@@ -185,6 +185,7 @@ function ExerciseEditor(props: {
           <select value={ex.unit} onChange={(e) => upd({ unit: e.target.value as Unit })}>
             <option value="kg">kg</option>
             <option value="lb">lb</option>
+            <option value="level">level (cardio, reps = min)</option>
           </select>
         </label>
       </div>

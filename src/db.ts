@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_LEGS, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN, WED_LEGS } from './seed';
+import { CARDIO, CARDIO_DAYS, PULL_UP, PULL_UP_FIELDS, SEED, SUN_BAYESIAN, SUN_KICKBACK, SUN_LEGS, SUN_REPLACED, THU_HAMMER, THU_PUSHDOWN, WED_BACK, WED_DROPPED, WED_LEGS } from './seed';
 import type { Checkin, Day, DietDay, DietPhase, Exercise, ExerciseLog, Meta, Session, SessionItem, Slot } from './types';
 import { DAYS } from './types';
 import { DEFAULT_WEEK, type WeekPlan } from './shopping';
@@ -118,6 +118,46 @@ class GymoDB extends Dexie {
             if (existing) await table.update(existing.id!, { ...fields, order: order++, active: true });
             else await table.add({ day, ...fields, order: order++, active: true });
           }
+        }
+      });
+    // v8: Wednesday becomes deadlift → row → pull-up → biceps → traps, ahead
+    // of the leg block; the reverse fly is hidden there. Cardio is appended to
+    // Tue and Sat. Same-named rows on the day are reused (history kept), and
+    // anything else the user added on Wednesday stays, after the back block.
+    this.version(8)
+      .stores({})
+      .upgrade(async (tx) => {
+        const table = tx.table<Exercise, number>('exercises');
+        const norm = (n: string) => n.trim().toLowerCase();
+        const sorted = async (day: Day) => (await table.where('day').equals(day).toArray()).sort((a, b) => a.order - b.order || a.id! - b.id!);
+
+        const wed = await sorted('Wed');
+        const pick = (name: string) => wed.find((e) => norm(e.name) === norm(name) && e.active) ?? wed.find((e) => norm(e.name) === norm(name));
+        const back = WED_BACK.map((f) => ({ f, ex: pick(f.name) }));
+        const legs = WED_LEGS.map((f) => pick(f.name)).filter((e): e is Exercise => !!e);
+        const placed = new Set([...back.map((b) => b.ex), ...legs].filter(Boolean));
+        const dropped = new Set(WED_DROPPED.map(norm));
+        let order = 0;
+        for (const { f, ex } of back) {
+          if (ex) await table.update(ex.id!, { ...f, order: order++, active: true });
+          else await table.add({ day: 'Wed', ...f, order: order++, active: true });
+        }
+        const rest = wed.filter((e) => !placed.has(e));
+        const kept = rest.filter((e) => e.active && !dropped.has(norm(e.name)));
+        for (const e of rest) {
+          if (dropped.has(norm(e.name))) await table.update(e.id!, { active: false, superset: false, order: order++ });
+          else await table.update(e.id!, { order: order++, ...(e === kept.at(-1) ? { superset: false } : {}) });
+        }
+        for (const e of legs) await table.update(e.id!, { order: order++ });
+
+        for (const day of CARDIO_DAYS) {
+          const list = await sorted(day);
+          const existing = list.find((e) => norm(e.name) === norm(CARDIO.name));
+          const last = list.filter((e) => e.active && e !== existing).at(-1);
+          if (last?.superset) await table.update(last.id!, { superset: false });
+          const end = Math.max(-1, ...list.map((e) => e.order)) + 1;
+          if (existing) await table.update(existing.id!, { ...CARDIO, order: end, active: true });
+          else await table.add({ day, ...CARDIO, order: end, active: true });
         }
       });
     this.on('populate', (tx) => {

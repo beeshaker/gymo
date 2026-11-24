@@ -1,5 +1,6 @@
 export type Day = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
-export type Unit = 'kg' | 'lb';
+/** 'level' = cardio machine resistance; its reps are minutes. */
+export type Unit = 'kg' | 'lb' | 'level';
 export type Toe = 'none' | 'worse';
 
 export const DAYS: Day[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];

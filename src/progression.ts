@@ -43,12 +43,16 @@ export function decide(rx: Rx, history: Entry[]): Decision {
   const h = history.filter((e) => !e.deload && e.reps.length > 0);
   const last = h.at(-1);
   const u = rx.unit;
+  const cardio = u === 'level';
+  const word = cardio ? 'minutes' : 'reps';
 
   if (!last) {
     return {
       kind: 'start',
       label: 'First session',
-      detail: `Pick a load you can lift for ${rx.sets} × ${rx.minReps}–${rx.maxReps} with 1–2 reps left.`,
+      detail: cardio
+        ? `Pick a level you can hold for ${rx.minReps} min at a steady, talking pace.`
+        : `Pick a load you can lift for ${rx.sets} × ${rx.minReps}–${rx.maxReps} with 1–2 reps left.`,
       load: null,
       reps: fill(rx.sets, rx.minReps),
     };
@@ -71,7 +75,7 @@ export function decide(rx: Rx, history: Entry[]): Decision {
       return {
         kind: 'increase',
         label: `Add ${rx.increment} ${u}`,
-        detail: `Top of range twice at ${last.load} ${u}. Move to ${next} ${u} and build reps again.`,
+        detail: `Top of range twice at ${last.load} ${u}. Move to ${next} ${u} and build ${word} again.`,
         load: next,
         reps: fill(rx.sets, rx.minReps),
       };
@@ -79,7 +83,7 @@ export function decide(rx: Rx, history: Entry[]): Decision {
     return {
       kind: 'confirm',
       label: 'Repeat to confirm',
-      detail: `Every set hit ${rx.maxReps}. Match it again at ${last.load} ${u}, then add weight.`,
+      detail: `${cardio ? 'Reached' : 'Every set hit'} ${rx.maxReps}${cardio ? ' min' : ''}. Match it again at ${last.load} ${u}, then ${cardio ? 'go up a level' : 'add weight'}.`,
       load: last.load,
       reps: fill(rx.sets, rx.maxReps),
     };
@@ -90,7 +94,7 @@ export function decide(rx: Rx, history: Entry[]): Decision {
     return {
       kind: 'reduce',
       label: 'Below range',
-      detail: `No set reached ${rx.minReps}. Drop one step so every set lands in range.`,
+      detail: `${cardio ? 'Didn’t reach' : 'No set reached'} ${rx.minReps}${cardio ? ' min' : ''}. ${cardio ? 'Drop a level' : 'Drop one step so every set lands in range'}.`,
       load: Math.max(0, round(last.load - rx.increment)),
       reps: fill(rx.sets, rx.minReps),
     };
@@ -107,7 +111,7 @@ export function decide(rx: Rx, history: Entry[]): Decision {
     return {
       kind: 'stalled',
       label: 'Stalled',
-      detail: `3 sessions at ${last.load} ${u} without more reps. Check sleep, food and rest times; if tired, take a lighter week.`,
+      detail: `3 sessions at ${last.load} ${u} without more ${word}. Check sleep, food and rest times; if tired, take a lighter week.`,
       load: last.load,
       reps: target,
     };
@@ -115,8 +119,8 @@ export function decide(rx: Rx, history: Entry[]): Decision {
 
   return {
     kind: 'build',
-    label: 'Build reps',
-    detail: `Same load. Aim for ${target.join(' / ')} — beat ${total(last)} total reps.`,
+    label: cardio ? 'Build minutes' : 'Build reps',
+    detail: `Same load. Aim for ${target.join(' / ')}${cardio ? ' min' : ''} — beat ${total(last)} total ${word}.`,
     load: last.load,
     reps: target,
   };

@@ -45,6 +45,29 @@ export const SUN_LEGS = [
   { name: 'Hip adduction machine', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg' as const, increment: 2.5, superset: false, note: 'Arch or heel on the foot peg, not the toes. Squeeze the thighs together, 1 s pause, slow on the way out.' },
 ];
 
+/**
+ * v8: Wednesday is a back day: deadlift, row, pull-up, then biceps and traps.
+ * The reverse fly leaves Wednesday (Saturday still has it). Names match the
+ * old rows so their history carries over.
+ */
+export const WED_BACK = [
+  { name: 'Deadlift', sets: 3, minReps: 5, maxReps: 8, restSec: 180, unit: 'kg' as const, increment: 5, superset: false, note: 'Trap bar if there is one. Flat shoes, weight through the heels and midfoot, toes relaxed. Start light and log the toe. Stop if it hurts.' },
+  { name: 'Seated cable row', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'lb' as const, increment: 5, superset: false, note: 'V-handle, chest tall, pause at the belly.' },
+  { name: PULL_UP.name, ...PULL_UP_FIELDS, superset: false },
+  { name: 'Incline dumbbell curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg' as const, increment: 1, superset: false, note: 'Arms hang behind the body for the stretch. Per hand.' },
+  { name: 'Seated hammer curl', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 1, superset: true, note: 'Brachialis + forearm thickness. Per hand. Straight into the shrug.' },
+  { name: 'Seated dumbbell shrug', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg' as const, increment: 2, superset: false, note: 'Sit on bench end. Shoulders to ears, 1 s pause. Straps OK.' },
+];
+export const WED_DROPPED = ['Seated reverse fly'];
+
+/**
+ * v8: cardio twice a week at the end of Tue and Sat. Logged in minutes ("reps")
+ * at a resistance level ("load"), so double progression adds minutes up to the
+ * top, then a level.
+ */
+export const CARDIO = { name: 'Cardio: bike', sets: 1, minReps: 20, maxReps: 30, restSec: 60, unit: 'level' as const, increment: 1, superset: false, note: 'Recumbent or upright bike, heel or arch on the pedal so the toes stay unloaded. Steady pace, you could still talk. Reps = minutes, load = resistance level.' };
+export const CARDIO_DAYS = ['Tue', 'Sat'] as const;
+
 type Row = Omit<Exercise, 'id' | 'order' | 'active' | 'superset'> & { superset?: boolean };
 
 const rows: Row[] = [
@@ -52,12 +75,9 @@ const rows: Row[] = [
   { day: 'Tue', name: 'Incline supported press', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'kg', increment: 2, note: 'Incline dumbbell or machine press.' },
   { day: 'Tue', name: 'Seated triceps pushdown', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope. Straight into the overhead extension.', superset: true },
   { day: 'Tue', name: 'Seated overhead triceps extension', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Rope, cable low, seated facing away. Deep stretch for the long head.' },
+  { day: 'Tue', ...CARDIO },
 
-  { day: 'Wed', name: PULL_UP.name, ...PULL_UP_FIELDS },
-  { day: 'Wed', name: 'Seated cable row', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'lb', increment: 5, note: 'V-handle, chest tall, pause at the belly.' },
-  { day: 'Wed', name: 'Incline dumbbell curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Arms hang behind the body for the stretch. Per hand.', superset: true },
-  { day: 'Wed', name: 'Seated reverse fly', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 2.5, note: 'Reverse pec deck. Rear delts.' },
-  { day: 'Wed', name: 'Seated hammer curl', sets: 3, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 1, note: 'Brachialis + forearm thickness. Per hand.' },
+  ...WED_BACK.map((r) => ({ day: 'Wed' as const, ...r })),
   ...WED_LEGS.map((r) => ({ day: 'Wed' as const, ...r })),
 
   { day: 'Thu', name: 'Seated machine shoulder press', sets: 3, minReps: 8, maxReps: 12, restSec: 120, unit: 'kg', increment: 2.5, note: '' },
@@ -74,6 +94,7 @@ const rows: Row[] = [
   { day: 'Sat', name: 'Pec deck', sets: 2, minReps: 12, maxReps: 15, restSec: 75, unit: 'kg', increment: 2.5, note: 'Same machine as the reverse fly.', superset: true },
   { day: 'Sat', name: 'Seated reverse fly', sets: 2, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 2.5, note: 'Reverse pec deck.' },
   { day: 'Sat', name: 'Seated dumbbell shrug', sets: 2, minReps: 10, maxReps: 15, restSec: 75, unit: 'kg', increment: 2, note: '1 s pause at the top.' },
+  { day: 'Sat', ...CARDIO },
 
   { day: 'Sun', name: 'Seated lateral raise', sets: 3, minReps: 12, maxReps: 20, restSec: 75, unit: 'kg', increment: 1, note: '' },
   { day: 'Sun', name: 'Seated supported curl', sets: 3, minReps: 8, maxReps: 12, restSec: 75, unit: 'kg', increment: 1, note: 'Preacher or seated barbell/dumbbell curl.', superset: true },

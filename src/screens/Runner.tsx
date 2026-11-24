@@ -245,6 +245,7 @@ function SetLogger(props: ViewProps & { decision: Decision; last?: ExerciseLog }
   const [rir, setRir] = useState<number | null>(log?.rir ?? null);
   const [toe, setToe] = useState<Toe | null>(log?.toe ?? null);
   const complete = done.length >= sets;
+  const cardio = ex.unit === 'level';
 
   const persist = (patch: Partial<ExerciseLog>) =>
     saveLog({
@@ -296,7 +297,7 @@ function SetLogger(props: ViewProps & { decision: Decision; last?: ExerciseLog }
           <button className="btn ghost" onClick={onEdit}>Edit</button>
         </div>
         <div className="muted">
-          {sets} × {ex.minReps}–{ex.maxReps} · 1–2 reps in reserve
+          {cardio ? <>{ex.minReps}–{ex.maxReps} min · steady, could still talk</> : <>{sets} × {ex.minReps}–{ex.maxReps} · 1–2 reps in reserve</>}
           {supersetWith && <> · <span className="ss">✱ superset with {supersetWith}</span></>}
         </div>
       </div>
@@ -306,11 +307,11 @@ function SetLogger(props: ViewProps & { decision: Decision; last?: ExerciseLog }
         <p>{decision.detail}</p>
         {last && (
           <p className="muted">
-            Last: {last.load} {last.unit} × {last.reps.join('/')}
+            Last: {last.load} {last.unit} × {last.reps.join('/')}{cardio && ' min'}
             {last.rir !== null && ` · RIR ${last.rir}`} · {last.date}
           </p>
         )}
-        {first && done.length === 0 && <p className="muted">Do 2–3 lighter warm-up sets first — don’t log them.</p>}
+        {first && !cardio && done.length === 0 && <p className="muted">Do 2–3 lighter warm-up sets first — don’t log them.</p>}
         {ex.note && <p className="muted">{ex.note}</p>}
       </div>
 
@@ -329,21 +330,21 @@ function SetLogger(props: ViewProps & { decision: Decision; last?: ExerciseLog }
         ))}
       </div>
 
-      <Stepper label={`Load (${ex.unit})`} value={load} step={ex.increment} suffix={ex.unit} onChange={changeLoad} />
+      <Stepper label={cardio ? 'Resistance level' : `Load (${ex.unit})`} value={load} step={ex.increment} suffix={ex.unit} onChange={changeLoad} />
 
       {!complete ? (
         <>
-          <Stepper label={`Reps — set ${done.length + 1}`} value={reps} step={1} onChange={setReps} />
+          <Stepper label={cardio ? 'Minutes' : `Reps — set ${done.length + 1}`} value={reps} step={1} onChange={setReps} />
           <button className="btn primary big" onClick={logSet}>
-            Log set {done.length + 1}
-            {supersetWith ? ' · next exercise' : ` · start ${mmss(ex.restSec)} rest`}
+            {cardio ? 'Log cardio' : `Log set ${done.length + 1}`}
+            {cardio ? '' : supersetWith ? ' · next exercise' : ` · start ${mmss(ex.restSec)} rest`}
           </button>
         </>
       ) : (
         <div className="finish-ex">
-          <div className="q">Reps left on your hardest set?</div>
+          <div className="q">{cardio ? 'How many more minutes could you have kept that pace?' : 'Reps left on your hardest set?'}</div>
           <Chips
-            options={[0, 1, 2, 3, 4].map((v) => ({ value: v, label: v === 4 ? '4+' : String(v) }))}
+            options={[0, 1, 2, 3, 4].map((v) => ({ value: v, label: cardio ? ['None', '1–5', '5–10', '10–15', '15+'][v] : v === 4 ? '4+' : String(v) }))}
             value={rir}
             onChange={(v) => {
               setRir(v);
@@ -362,7 +363,7 @@ function SetLogger(props: ViewProps & { decision: Decision; last?: ExerciseLog }
               void persist({ toe: v });
             }}
           />
-          {rir === 0 && <p className="hint warn">0 RIR = failure. Next time stop 1–2 reps earlier.</p>}
+          {rir === 0 && !cardio && <p className="hint warn">0 RIR = failure. Next time stop 1–2 reps earlier.</p>}
           {toe === 'worse' && <p className="hint warn">Stop this exercise and review with your clinician.</p>}
         </div>
       )}
